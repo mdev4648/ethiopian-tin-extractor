@@ -2,249 +2,166 @@
 <html>
 <head>
     <title>Ethiopian TIN Extractor</title>
-
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <style>
-
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-        }
-
-        body{
-            font-family: Inter, Arial, sans-serif;
-            background:#f4f7fb;
-            min-height:100vh;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            padding:20px;
-        }
-
-        .card{
-            width:100%;
-            max-width:700px;
-            background:white;
-            border-radius:24px;
-            padding:40px;
-            box-shadow:
-                0 10px 25px rgba(0,0,0,.08),
-                0 20px 48px rgba(0,0,0,.05);
-        }
-
-        .logo{
-            width:70px;
-            height:70px;
-            background:#2563eb;
-            border-radius:18px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            margin:auto;
-            font-size:32px;
-            color:white;
-        }
-
-        h1{
-            text-align:center;
-            margin-top:20px;
-            color:#111827;
-        }
-
-        .subtitle{
-            text-align:center;
-            color:#6b7280;
-            margin-top:10px;
-            margin-bottom:35px;
-        }
-
-        .upload-box{
-            border:2px dashed #d1d5db;
-            padding:30px;
-            border-radius:16px;
-            text-align:center;
-            margin-bottom:25px;
-            background:#fafafa;
-        }
-
-        input[type=file]{
-            width:100%;
-            padding:12px;
-        }
-
-        .buttons{
-            display:grid;
-            grid-template-columns:1fr 1fr;
-            gap:15px;
-        }
-
-        button{
-            border:none;
-            border-radius:14px;
-            padding:16px;
-            font-size:15px;
-            font-weight:600;
-            cursor:pointer;
-            transition:.2s;
-        }
-
-        button:hover{
-            transform:translateY(-2px);
-        }
-
-        .mobile-btn{
-            background:#2563eb;
-            color:white;
-        }
-
-        .est-btn{
-            background:#10b981;
-            color:white;
-        }
-
-        .footer{
-            margin-top:30px;
-            text-align:center;
-            color:#9ca3af;
-            font-size:13px;
-        }
-
-        .stats{
-            display:grid;
-            grid-template-columns:repeat(3,1fr);
-            gap:15px;
-            margin-bottom:30px;
-        }
-
-        .stat{
-            background:#f8fafc;
-            border-radius:14px;
-            padding:15px;
-            text-align:center;
-        }
-
-        .stat-value{
-            font-size:22px;
-            font-weight:bold;
-            color:#111827;
-        }
-
-        .stat-label{
-            font-size:13px;
-            color:#6b7280;
-            margin-top:5px;
-        }
-
-        @media(max-width:700px){
-
-            .buttons{
-                grid-template-columns:1fr;
-            }
-
-            .stats{
-                grid-template-columns:1fr;
-            }
-        }
-
-    </style>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
 
 <div class="card">
-
-    <div class="logo">
-        🇪🇹
-    </div>
-
+    <div class="logo">🇪🇹</div>
     <h1>Ethiopian TIN Extractor</h1>
-
     <div class="subtitle">
         Extract Mobile Numbers and Establishment Phones from ERCA TIN Data
     </div>
 
     <div class="stats">
-
         <div class="stat">
-            <div class="stat-value">700+</div>
+            <div class="stat-value">500+</div>
             <div class="stat-label">TIN Supported</div>
         </div>
-
         <div class="stat">
             <div class="stat-value">CSV</div>
             <div class="stat-label">Export Format</div>
         </div>
-
         <div class="stat">
             <div class="stat-value">⚡</div>
             <div class="stat-label">Fast Processing</div>
         </div>
-
     </div>
 
-    <form id="mobileForm"
-          action="/extract-mobile"
-          method="post"
-          enctype="multipart/form-data">
+    <div class="progress-container" id="progressContainer">
+        <div class="progress-status">
+            <span id="statusText">Processing...</span>
+            <span id="progressPercent">0%</span>
+        </div>
+        <div class="current-tin" id="currentTinText">Preparing file...</div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+    </div>
 
+    <form id="uploadForm">
         <div class="upload-box">
-
             <h3>Select Excel File</h3>
-
             <br>
-
-            <input
-                type="file"
-                id="fileInput"
-                name="file"
-                accept=".xlsx,.xls"
-                required>
-
+            <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" required>
         </div>
 
         <div class="buttons">
-
-            <button
-                type="submit"
-                class="mobile-btn">
-                📱 Extract Mobile Numbers
+            <button type="button" class="mobile-btn" id="mobileBtn" onclick="startExtraction('mobile')">
+                 Extract Mobile Numbers
             </button>
-
-            <button
-                type="button"
-                class="est-btn"
-                onclick="submitEstablishments()">
-                🏢 Extract Establishment Phones
+            <button type="button" class="est-btn" id="estBtn" onclick="startExtraction('establishment')">
+                Extract Establishment Phones
             </button>
-
         </div>
-
     </form>
 
     <div class="footer">
-        Built with FastAPI • Internal Business Tool
+        Powered By Haron • Internal Business Tool
     </div>
-
 </div>
 
 <script>
+let pollInterval;
 
-function submitEstablishments(){
+async function startExtraction(type) {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files[0]) {
+        alert("Please select an Excel file first!");
+        return;
+    }
 
-    const form =
-        document.getElementById(
-            "mobileForm"
-        );
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
 
-    form.action =
-        "/extract-establishments";
+    // 1. UI updates: Disable elements and show progress section
+    document.getElementById('mobileBtn').disabled = true;
+    document.getElementById('estBtn').disabled = true;
+    fileInput.disabled = true;
+    
+    const progressContainer = document.getElementById('progressContainer');
+    const statusText = document.getElementById('statusText');
+    const currentTinText = document.getElementById('currentTinText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const progressPercent = document.getElementById('progressPercent');
+    
+    progressContainer.style.display = 'block';
+    statusText.innerText = "Uploading & initializing...";
+    progressBarFill.style.width = '0%';
+    progressPercent.innerText = '0%';
+    currentTinText.innerText = 'Reading document records...';
 
-    form.submit();
+    // 2. Post file to endpoint targeting specific mode
+    const endpoint = type === 'mobile' ? '/extract-mobile' : '/extract-establishments';
+    
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) throw new Error("Failed to start processing.");
+        
+        const data = await response.json();
+        const taskId = data.task_id;
+
+        // 3. Start real-time polling updates
+        pollInterval = setInterval(() => checkProgress(taskId), 1000);
+
+    } catch (error) {
+        alert("An error occurred: " + error.message);
+        resetUI();
+    }
 }
 
+async function checkProgress(taskId) {
+    try {
+        const response = await fetch(`/task-status/${taskId}`);
+        const data = await response.json();
+
+        const statusText = document.getElementById('statusText');
+        const currentTinText = document.getElementById('currentTinText');
+        const progressBarFill = document.getElementById('progressBarFill');
+        const progressPercent = document.getElementById('progressPercent');
+
+        if (data.status === 'processing') {
+            const percent = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+            statusText.innerText = `Processing (${data.current}/${data.total})`;
+            currentTinText.innerText = data.current_tin ? `Checking TIN: ${data.current_tin}` : 'Connecting...';
+            progressBarFill.style.width = `${percent}%`;
+            progressPercent.innerText = `${percent}%`;
+        } 
+        else if (data.status === 'completed') {
+            clearInterval(pollInterval);
+            statusText.innerText = "Complete!";
+            progressBarFill.style.width = '100%';
+            progressPercent.innerText = '100%';
+            currentTinText.innerText = "Downloading output file...";
+            
+            // Trigger automatic file download route redirect
+            window.location.href = `/download/${taskId}`;
+            
+            setTimeout(resetUI, 3000); // Reset interactive UI states shortly after
+        } 
+        else if (data.status === 'failed') {
+            clearInterval(pollInterval);
+            alert("Background parsing sequence failed.");
+            resetUI();
+        }
+    } catch (e) {
+        console.error("Polling error:", e);
+    }
+}
+
+function resetUI() {
+    document.getElementById('mobileBtn').disabled = false;
+    document.getElementById('estBtn').disabled = false;
+    document.getElementById('fileInput').disabled = false;
+    document.getElementById('progressContainer').style.display = 'none';
+}
 </script>
 
 </body>
