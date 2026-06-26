@@ -65,10 +65,14 @@ input[type=file] {
     padding: 12px;
 }
 
-.buttons {
+/* .buttons {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 15px;
+} */
+ .buttons {
+    display: flex;
+    justify-content:center
 }
 
 button {

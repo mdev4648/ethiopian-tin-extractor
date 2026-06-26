@@ -50,9 +50,9 @@
         </div>
 
         <div class="buttons">
-            <button type="button" class="mobile-btn" id="mobileBtn" onclick="startExtraction('mobile')">
+          <!--  <button type="button" class="mobile-btn" id="mobileBtn" onclick="startExtraction('mobile')">
                  Extract Mobile Numbers
-            </button>
+            </button>-->
             <button type="button" class="est-btn" id="estBtn" onclick="startExtraction('establishment')">
                 Extract Establishment Phones
             </button>
@@ -78,7 +78,7 @@ async function startExtraction(type) {
     formData.append('file', fileInput.files[0]);
 
     // 1. UI updates: Disable elements and show progress section
-    document.getElementById('mobileBtn').disabled = true;
+    //document.getElementById('mobileBtn').disabled = true;
     document.getElementById('estBtn').disabled = true;
     fileInput.disabled = true;
     
@@ -103,7 +103,9 @@ async function startExtraction(type) {
             body: formData
         });
         
-        if (!response.ok) throw new Error("Failed to start processing.");
+        if (!response.ok) {
+                      throw new Error("Unable to start processing. Verify that the uploaded Excel file has exactly one column with the header 'TIN'.");
+           }
         
         const data = await response.json();
         const taskId = data.task_id;
@@ -117,7 +119,7 @@ async function startExtraction(type) {
     }
 }
 
-async function checkProgress(taskId) {
+/*async function checkProgress(taskId) {
     try {
         const response = await fetch(`/task-status/${taskId}`);
         const data = await response.json();
@@ -154,10 +156,126 @@ async function checkProgress(taskId) {
     } catch (e) {
         console.error("Polling error:", e);
     }
+}*/
+
+/*async function checkProgress(taskId) {
+    try {
+        const response = await fetch(`/task-status/${taskId}`);
+        if (!response.ok) throw new Error("Status endpoint unreachable.");
+        
+        const data = await response.json();
+
+        const statusText = document.getElementById('statusText');
+        const currentTinText = document.getElementById('currentTinText');
+        const progressBarFill = document.getElementById('progressBarFill');
+        const progressPercent = document.getElementById('progressPercent');
+
+        if (data.status === 'processing') {
+            const percent = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+            const failedInfo = data.failed_count > 0 ? ` (Errors/Skipped: ${data.failed_count})` : '';
+            
+            statusText.innerText = `Processing (${data.current}/${data.total})${failedInfo}`;
+            statusText.style.color = data.failed_count > 0 ? "#b45309" : "#334155"; // Changes to amber on dynamic drops
+            currentTinText.innerText = data.current_tin ? `Checking TIN: ${data.current_tin}` : 'Connecting...';
+            progressBarFill.style.width = `${percent}%`;
+            progressPercent.innerText = `${percent}%`;
+        } 
+        else if (data.status === 'completed') {
+            clearInterval(pollInterval);
+            
+            if (data.ui_warning) {
+                statusText.innerText = "Completed with interruptions!";
+                statusText.style.color = "#dc2626";
+                currentTinText.innerText = data.ui_warning;
+            } else {
+                statusText.innerText = "Complete!";
+                statusText.style.color = "#10b981";
+                currentTinText.innerText = `Finished! Downloaded items successfully.`;
+            }
+            
+            progressBarFill.style.width = '100%';
+            progressPercent.innerText = '100%';
+            
+            // Redirect automatically to pull the fallback output file template link
+            window.location.href = `/download/${taskId}`;
+            
+            setTimeout(resetUI, 5000); 
+        } 
+        else if (data.status === 'failed') {
+            clearInterval(pollInterval);
+            alert("Background parsing sequence failed completely: " + data.error);
+            resetUI();
+        }
+    } catch (e) {
+        // Keeps user informed if local internet drops out completely during execution
+        console.error("Polling error:", e);
+        document.getElementById('statusText').innerText = "Reconnecting to server status updates...";
+        document.getElementById('statusText').style.color = "#dc2626";
+    }
+} */
+async function checkProgress(taskId) {
+    try {
+        const response = await fetch(`/task-status/${taskId}`);
+        if (!response.ok) throw new Error("Status endpoint unreachable.");
+        
+        const data = await response.json();
+
+        const statusText = document.getElementById('statusText');
+        const currentTinText = document.getElementById('currentTinText');
+        const progressBarFill = document.getElementById('progressBarFill');
+        const progressPercent = document.getElementById('progressPercent');
+
+        if (data.status === 'processing') {
+            const percent = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+            const failedInfo = data.failed_count > 0 ? ` (Errors/Skipped: ${data.failed_count})` : '';
+            
+            statusText.innerText = `Processing (${data.current}/${data.total})${failedInfo}`;
+            // Turn text amber if some records are failing/skipping
+            statusText.style.color = data.failed_count > 0 ? "#b45309" : "#334155"; 
+            currentTinText.innerText = data.current_tin ? `Checking TIN: ${data.current_tin}` : 'Connecting...';
+            progressBarFill.style.width = `${percent}%`;
+            progressPercent.innerText = `${percent}%`;
+        } 
+        else if (data.status === 'completed') {
+            clearInterval(pollInterval);
+            
+            if (data.ui_warning) {
+                statusText.innerText = "Completed with interruptions!";
+                statusText.style.color = "#dc2626"; // Red
+                currentTinText.innerText = data.ui_warning;
+            } else {
+                statusText.innerText = "Complete!";
+                statusText.style.color = "#10b981"; // Green
+                currentTinText.innerText = `Finished! Downloaded items successfully.`;
+            }
+            
+            progressBarFill.style.width = '100%';
+            progressPercent.innerText = '100%';
+            
+            // Trigger download automatically
+            window.location.href = `/download/${taskId}`;
+            setTimeout(resetUI, 5000); 
+        } 
+        else if (data.status === 'failed') {
+            // This handles the total connection drop gracefully directly in the UI
+            clearInterval(pollInterval);
+            statusText.innerText = "Connection Error!";
+            statusText.style.color = "#dc2626"; // Error Red
+            currentTinText.innerHTML = `<strong>Failed:</strong> ${data.error || "The server lost connection to the ERCA server."}`;
+            
+            // Keep the inputs disabled for a few seconds so they can see the error, then reset
+            setTimeout(resetUI, 6000);
+        }
+    } catch (e) {
+        console.error("Polling error:", e);
+        document.getElementById('statusText').innerText = "Network Lost!";
+        document.getElementById('statusText').style.color = "#dc2626";
+        document.getElementById('currentTinText').innerText = "Retrying connection to your application instance...";
+    }
 }
 
 function resetUI() {
-    document.getElementById('mobileBtn').disabled = false;
+    //document.getElementById('mobileBtn').disabled = false;
     document.getElementById('estBtn').disabled = false;
     document.getElementById('fileInput').disabled = false;
     document.getElementById('progressContainer').style.display = 'none';
